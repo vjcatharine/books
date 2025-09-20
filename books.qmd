@@ -1,0 +1,30 @@
+---
+title: "Untitled"
+format: html
+editor: visual
+---
+
+```{r}
+# load packages
+library(tidyverse)
+```
+
+```{r}
+# data export date
+data_date <- as.Date("2025-09-20")
+
+# load in the data
+books_raw <- read_csv(
+  here::here(
+    glue::glue("data/{data_date}_goodreads_library_export.csv"))) |>
+  janitor::clean_names()
+```
+
+```{r}
+
+df_books_read <- books_raw |>
+  filter(exclusive_shelf == "read")
+
+```
+
+
