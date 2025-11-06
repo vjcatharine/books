@@ -7,6 +7,9 @@ editor: visual
 ```{r}
 # load packages
 library(tidyverse)
+library(httr)
+library(jsonlite)
+library(progress)
 ```
 
 ```{r}
@@ -23,8 +26,106 @@ books_raw <- read_csv(
 ```{r}
 
 df_books_read <- books_raw |>
-  filter(exclusive_shelf == "read")
+  filter(exclusive_shelf == "read") |>
+  mutate(
+    year_read = year(date_read)
+  )
 
 ```
 
+
+```{r}
+
+get_googlebooks_genre <- function(title, author) {
+  # Construct URL
+  url <- paste0(
+    "https://www.googleapis.com/books/v1/volumes?q=intitle:",
+    URLencode(title, reserved = TRUE),
+    "+inauthor:",
+    URLencode(author, reserved = TRUE)
+  )
+  
+  res <- httr::GET(url)
+  if (httr::status_code(res) != 200) return(NA)
+  
+  # Prevent simplification
+  data <- jsonlite::fromJSON(httr::content(res, "text", encoding = "UTF-8"), simplifyVector = FALSE)
+  
+  if (is.null(data$items) || length(data$items) == 0) return(NA)
+  
+  # Find first item with categories
+  for (item in data$items) {
+    if (is.list(item) && !is.null(item$volumeInfo$categories)) {
+      return(paste(head(item$volumeInfo$categories, 3), collapse = ", "))
+    }
+  }
+  
+  return(NA)
+}
+
+
+
+
+get_googlebooks_genre("Pride and Prejudice", "Jane Austen")
+
+```
+
+
+
+```{r}
+
+get_googlebooks_genre_safe <- function(title, author) {
+  url <- paste0(
+    "https://www.googleapis.com/books/v1/volumes?q=intitle:",
+    URLencode(title, reserved = TRUE),
+    "+inauthor:",
+    URLencode(author, reserved = TRUE)
+  )
+  
+  res <- GET(url)
+  if (status_code(res) != 200) return(NA)
+  
+  data <- fromJSON(content(res, "text", encoding = "UTF-8"), simplifyVector = FALSE)
+  
+  if (is.null(data$items) || length(data$items) == 0) return(NA)
+  
+  for (item in data$items) {
+    if (is.list(item) && !is.null(item$volumeInfo$categories)) {
+      return(paste(head(item$volumeInfo$categories, 3), collapse = ", "))
+    }
+  }
+  return(NA)
+}
+
+# Apply to your dataframe
+df_books_read$Genre <- NA  # initialize
+
+pb <- progress_bar$new(total = nrow(df_books_read))
+
+for (i in seq_len(nrow(df_books_read))) {
+  df_books_read$Genre[i] <- get_googlebooks_genre_safe(df_books_read$title[i], df_books_read$author[i])
+  pb$tick()
+  Sys.sleep(0.5)  # avoid hammering API
+}
+
+
+```
+
+
+```{r}
+
+title <- "Pride and Prejudice"
+author <- "Jane Austen"
+
+url <- paste0("https://openlibrary.org/search.json?title=",
+              URLencode(title, reserved = TRUE),
+              "&author=", URLencode(author, reserved = TRUE))
+
+res <- GET(url)
+data <- fromJSON(content(res, "text", encoding = "UTF-8"))
+
+str(data$docs[[1]])
+
+
+```
 
